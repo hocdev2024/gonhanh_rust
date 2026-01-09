@@ -1,7 +1,7 @@
 use crate::engine::ENGINE;
-use crate::settings::{InputMethod}; // Removed Settings unused
-use windows::core::{PCWSTR}; // Removed PWSTR unused
-use windows::Win32::Foundation::{HWND, LPARAM, WPARAM}; // Removed HINSTANCE, LRESULT unused if truly unused
+use crate::settings::{InputMethod};
+use windows::core::{PCWSTR};
+use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::Controls::{
     CheckDlgButton, IsDlgButtonChecked, BST_CHECKED, BST_UNCHECKED,
@@ -23,11 +23,8 @@ use windows::Win32::System::Registry::{
 
 // Control IDs
 const IDC_GRP_INPUT: i32 = 101;
-// const IDC_RAD_TELEX: i32 = 102; // Removed
-// const IDC_RAD_VNI: i32 = 103;   // Removed
 const IDC_CHK_ENABLED: i32 = 104;
 const IDC_CHK_MODERN: i32 = 105;
-// const IDC_CHK_CAPS: i32 = 106; // Unused
 // The user asked to KEEP functions.
 // Let's re-map IDs cleanly.
 
@@ -62,7 +59,6 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 
 
-// use std::sync::atomic::{AtomicBool, Ordering}; // Removed unused atomics
 
 const WM_TRAYICON: u32 = windows::Win32::UI::WindowsAndMessaging::WM_USER + 1;
 const ID_TRAY_ICON: u32 = 1;
@@ -226,8 +222,6 @@ unsafe extern "system" fn dialog_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lpar
     }
 }
 
-// Helper to load icon from memory
-// Helper removed as we now load from resources directly
 
 
 // Global state tracking for tray to avoid re-adding

@@ -128,48 +128,17 @@ unsafe extern "system" fn keyboard_proc(code: i32, wparam: WPARAM, lparam: LPARA
     let ctrl_down = (GetKeyState(windows::Win32::UI::Input::KeyboardAndMouse::VK_CONTROL.0 as i32) as u16 & 0x8000) != 0;
     let caps_on = (GetKeyState(VK_CAPITAL.0 as i32) as u16 & 0x0001) != 0;
 
-    // Logic for Ctrl + Shift toggle
-    // We want to toggle when Ctrl+Shift are pressed and then released, WITHOUT other keys.
-    // Simpler approach often used: Trigger on KeyDown if both are down? No, that conflicts.
-    // Standard Windows behavior: Toggle on KeyUp of the modifier, if ONLY modifiers were pressed.
-    
     let is_ctrl = vk == windows::Win32::UI::Input::KeyboardAndMouse::VK_LCONTROL || vk == windows::Win32::UI::Input::KeyboardAndMouse::VK_RCONTROL;
     let is_shift = vk == VK_SHIFT || vk == windows::Win32::UI::Input::KeyboardAndMouse::VK_LSHIFT || vk == windows::Win32::UI::Input::KeyboardAndMouse::VK_RSHIFT;
 
     if is_keydown {
         if !is_ctrl && !is_shift {
             OTHER_KEY_PRESSED = true;
-        } else {
-            // If only modifiers are down so far, reset flag if this is the start of a sequence?
-            // Actually, just track: if current key is mod, don't set flag.
-            // But we need to reset flag when ALL mods are up. 
-            // Simplified: If Ctrl and Shift are BOTH down, we prep for toggle.
         }
     } else {
-        // KeyUp
-        // If it's a modifier key up, and we had Ctrl+Shift, and no other keys...
         if is_ctrl || is_shift {
-            // Check if we just released a modifier, and the OTHER modifier is still down (or just released?)
-            // Windows IME switching is tricky.
-            // Let's implement a simpler version: 
-            // if (Ctrl is down AND Shift is pressed) OR (Shift is down AND Ctrl is pressed).
-            // BUT we must avoid masking shortcuts like Ctrl+Shift+S.
-            // So we toggle ONLY on KeyUp of Ctrl or Shift, if:
-            // 1. Both Ctrl and Shift WERE down.
-            // 2. No other key was pressed in between.
-            
-            // For now, let's try a robust heuristic:
-            // If KeyUp(Ctrl) and Shift is down, and !OTHER_KEY_PRESSED -> Toggle
-            // If KeyUp(Shift) and Ctrl is down, and !OTHER_KEY_PRESSED -> Toggle
-            
-            // We need to track OTHER_KEY_PRESSED reliably.
-            // Reset OTHER_KEY_PRESSED when neither Ctrl nor Shift is down.
-            
             if is_ctrl && shift_down && !OTHER_KEY_PRESSED {
                  ENGINE.lock().toggle_enabled();
-                 // Notify UI to update icon (via message or callback? Hook is in thread.)
-                 // We can use PostMessage to the main window if we knew its HWND. 
-                 // For now, let's let the UI poll or use a shared event, OR just find the window.
                  crate::ui::notify_update();
             } else if is_shift && ctrl_down && !OTHER_KEY_PRESSED {
                  ENGINE.lock().toggle_enabled();
@@ -249,7 +218,7 @@ unsafe fn send_replacement(res: &ImeResult) {
     if use_clipboard {
         // Warp Specific Logic: Clipboard Injection
         
-        // 1. Send Backspaces (SendInput usually works for deletion)
+        // 1. Send Backspaces
         let mut inputs: Vec<INPUT> = Vec::new();
         for _ in 0..res.backspace {
             inputs.push(create_key_input(VK_BACK, false));
