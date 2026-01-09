@@ -47,7 +47,8 @@ const IDC_GRP_SHORTCUT: i32 = 115;
 const IDC_GRP_SYSTEM: i32 = 116;
 
 const IDC_CHK_AUTO_CAP: i32 = 117;
-const IDC_CHK_DEBUG: i32 = 118;
+const IDC_CHK_SHOW_WINDOW: i32 = 118;
+const IDC_CHK_DEBUG: i32 = 119;
 
 use windows::Win32::UI::Shell::{
     Shell_NotifyIconW, NOTIFYICONDATAW, NIM_ADD, NIM_DELETE, NIM_MODIFY, NIF_ICON, NIF_MESSAGE, NIF_TIP,
@@ -101,8 +102,10 @@ pub fn run_ui() {
 
         WINDOW_HANDLE = hwnd;
 
-        // Show main window on start
-        ShowWindow(hwnd, SW_SHOW); 
+        // Show main window on start if enabled
+        if ENGINE.lock().get_settings().show_window_on_start {
+            ShowWindow(hwnd, SW_SHOW); 
+        }
 
         update_tray_icon(hwnd); 
 
@@ -146,63 +149,65 @@ unsafe extern "system" fn dialog_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lpar
             check_dlg_button(hwnd, IDC_CHK_MODERN, settings.modern_tone);
             check_dlg_button(hwnd, IDC_CHK_SYSTEM, settings.run_with_system);
             check_dlg_button(hwnd, IDC_CHK_AUTO_SWITCH, settings.auto_switch_mode);
-            check_dlg_button(hwnd, IDC_CHK_RESTORE_ENG, settings.auto_restore_english);
-            check_dlg_button(hwnd, IDC_CHK_AUTO_CAP, settings.auto_capitalize);
-            check_dlg_button(hwnd, IDC_CHK_DEBUG, settings.debug_enabled);
-            0
-        }
-        WM_TRAYICON => {
-            if lparam.0 as u32 == WM_LBUTTONUP {
-                 // Toggle Enabled/Disabled
-                 let mut settings = ENGINE.lock().get_settings();
-                 settings.enabled = !settings.enabled;
-                 ENGINE.lock().update_settings(settings.clone());
-                 
-                 // Configure UI to match new state
-                 check_dlg_button(hwnd, IDC_CHK_ENABLED, settings.enabled);
-                 update_tray_icon(hwnd);
-                 
-            } else if lparam.0 as u32 == WM_RBUTTONUP {
-                 let hmenu = CreatePopupMenu().unwrap();
-                 let show_str = encode_wide("Hiện bảng điều khiển");
-                 let exit_str = encode_wide("Thoát");
-                 let _ = AppendMenuW(hmenu, MF_STRING, IDM_SHOW, PCWSTR(show_str.as_ptr()));
-                 let _ = AppendMenuW(hmenu, MF_STRING, IDM_EXIT, PCWSTR(exit_str.as_ptr()));
-                 
-                 let mut pt = windows::Win32::Foundation::POINT::default();
-                 let _ = windows::Win32::UI::WindowsAndMessaging::GetCursorPos(&mut pt);
-                 let _ = windows::Win32::UI::WindowsAndMessaging::SetForegroundWindow(hwnd);
-                 let _ = TrackPopupMenu(hmenu, TPM_RIGHTBUTTON, pt.x, pt.y, 0, hwnd, None);
-                 use windows::Win32::UI::WindowsAndMessaging::DestroyMenu;
-                 let _ = DestroyMenu(hmenu);
-            }
-            0
-        }
-        WM_COMMAND => {
-            let id = (wparam.0 & 0xFFFF) as i32;
-            let code = (wparam.0 >> 16) as u16;
-            
-            if id == IDM_EXIT as i32 {
-                let _ = DestroyWindow(hwnd);
-                return 0;
-            }
-            if id == IDM_SHOW as i32 {
-                ShowWindow(hwnd, SW_SHOW);
-                use windows::Win32::UI::WindowsAndMessaging::SetForegroundWindow;
-                let _ = SetForegroundWindow(hwnd);
-                return 0;
-            }
-
-             if id == IDC_CHK_ENABLED || id == IDC_CHK_W_AS_U || id == IDC_CHK_BRACKET || 
-                id == IDC_CHK_MODERN || id == IDC_CHK_SYSTEM || id == IDC_CHK_AUTO_SWITCH ||
-                id == IDC_CHK_RESTORE_ENG || id == IDC_CHK_AUTO_CAP || id == IDC_CHK_DEBUG ||
-                (id == IDC_COMBO_METHOD && code == 1) { 
-                 
-                 save_settings_from_ui(hwnd);
-                 if id == IDC_CHK_ENABLED {
-                     update_tray_icon(hwnd);
-                 }
+             check_dlg_button(hwnd, IDC_CHK_RESTORE_ENG, settings.auto_restore_english);
+             check_dlg_button(hwnd, IDC_CHK_SHOW_WINDOW, settings.show_window_on_start);
+             check_dlg_button(hwnd, IDC_CHK_AUTO_CAP, settings.auto_capitalize);
+             check_dlg_button(hwnd, IDC_CHK_DEBUG, settings.debug_enabled);
+             0
+         }
+         WM_TRAYICON => {
+             if lparam.0 as u32 == WM_LBUTTONUP {
+                  // Toggle Enabled/Disabled
+                  let mut settings = ENGINE.lock().get_settings();
+                  settings.enabled = !settings.enabled;
+                  ENGINE.lock().update_settings(settings.clone());
+                  
+                  // Configure UI to match new state
+                  check_dlg_button(hwnd, IDC_CHK_ENABLED, settings.enabled);
+                  update_tray_icon(hwnd);
+                  
+             } else if lparam.0 as u32 == WM_RBUTTONUP {
+                  let hmenu = CreatePopupMenu().unwrap();
+                  let show_str = encode_wide("Hiện bảng điều khiển");
+                  let exit_str = encode_wide("Thoát");
+                  let _ = AppendMenuW(hmenu, MF_STRING, IDM_SHOW, PCWSTR(show_str.as_ptr()));
+                  let _ = AppendMenuW(hmenu, MF_STRING, IDM_EXIT, PCWSTR(exit_str.as_ptr()));
+                  
+                  let mut pt = windows::Win32::Foundation::POINT::default();
+                  let _ = windows::Win32::UI::WindowsAndMessaging::GetCursorPos(&mut pt);
+                  let _ = windows::Win32::UI::WindowsAndMessaging::SetForegroundWindow(hwnd);
+                  let _ = TrackPopupMenu(hmenu, TPM_RIGHTBUTTON, pt.x, pt.y, 0, hwnd, None);
+                  use windows::Win32::UI::WindowsAndMessaging::DestroyMenu;
+                  let _ = DestroyMenu(hmenu);
              }
+             0
+         }
+         WM_COMMAND => {
+             let id = (wparam.0 & 0xFFFF) as i32;
+             let code = (wparam.0 >> 16) as u16;
+             
+             if id == IDM_EXIT as i32 {
+                 let _ = DestroyWindow(hwnd);
+                 return 0;
+             }
+             if id == IDM_SHOW as i32 {
+                 ShowWindow(hwnd, SW_SHOW);
+                 use windows::Win32::UI::WindowsAndMessaging::SetForegroundWindow;
+                 let _ = SetForegroundWindow(hwnd);
+                 return 0;
+             }
+ 
+              if id == IDC_CHK_ENABLED || id == IDC_CHK_W_AS_U || id == IDC_CHK_BRACKET || 
+                 id == IDC_CHK_MODERN || id == IDC_CHK_SYSTEM || id == IDC_CHK_AUTO_SWITCH ||
+                 id == IDC_CHK_RESTORE_ENG || id == IDC_CHK_AUTO_CAP || id == IDC_CHK_DEBUG ||
+                 id == IDC_CHK_SHOW_WINDOW ||
+                 (id == IDC_COMBO_METHOD && code == 1) { 
+                  
+                  save_settings_from_ui(hwnd);
+                  if id == IDC_CHK_ENABLED {
+                      update_tray_icon(hwnd);
+                  }
+              }
              
              if id == IDC_BTN_TABLE || id == IDC_BTN_SHORTCUT {
                  MessageBoxW(hwnd, PCWSTR(encode_wide("Tính năng đang phát triển").as_ptr()), PCWSTR(encode_wide("Thông báo").as_ptr()), MB_OK);
@@ -301,6 +306,7 @@ unsafe fn init_controls(hwnd: HWND) {
     check_dlg_button(hwnd, IDC_CHK_SYSTEM, settings.run_with_system);
     check_dlg_button(hwnd, IDC_CHK_AUTO_SWITCH, settings.auto_switch_mode);
     check_dlg_button(hwnd, IDC_CHK_RESTORE_ENG, settings.auto_restore_english);
+    check_dlg_button(hwnd, IDC_CHK_SHOW_WINDOW, settings.show_window_on_start);
     check_dlg_button(hwnd, IDC_CHK_AUTO_CAP, settings.auto_capitalize);
 
     // Combo initialization
@@ -326,6 +332,7 @@ unsafe fn save_settings_from_ui(hwnd: HWND) {
     let system = is_dlg_button_checked(hwnd, IDC_CHK_SYSTEM);
     let auto_switch = is_dlg_button_checked(hwnd, IDC_CHK_AUTO_SWITCH);
     let restore_eng = is_dlg_button_checked(hwnd, IDC_CHK_RESTORE_ENG);
+    let show_window = is_dlg_button_checked(hwnd, IDC_CHK_SHOW_WINDOW);
     let auto_cap = is_dlg_button_checked(hwnd, IDC_CHK_AUTO_CAP);
     
     let sel = SendDlgItemMessageW(hwnd, IDC_COMBO_METHOD, CB_GETCURSEL, WPARAM(0), LPARAM(0));
@@ -340,6 +347,7 @@ unsafe fn save_settings_from_ui(hwnd: HWND) {
     current.run_with_system = system;
     current.auto_switch_mode = auto_switch;
     current.auto_restore_english = restore_eng;
+    current.show_window_on_start = show_window;
     current.auto_capitalize = auto_cap;
     
     ENGINE.lock().update_settings(current);
@@ -420,7 +428,7 @@ fn create_dialog_template(title: &str) -> Vec<u8> {
                 DS_MODALFRAME as u32 | DS_CENTER as u32 | DS_SETFONT as u32;
                 
     let ext_style = 0u32;
-    let num_items: u16 = 17; // Increased count for Debug checkbox
+    let num_items: u16 = 18; // Increased count for Show Window checkbox
     
     buffer.extend_from_slice(&style.to_le_bytes());
     buffer.extend_from_slice(&ext_style.to_le_bytes());
@@ -531,8 +539,11 @@ fn create_dialog_template(title: &str) -> Vec<u8> {
     // Restore English
     add_item(15, 235, 170, 14, IDC_CHK_RESTORE_ENG as i16, BS_AUTOCHECKBOX as u32, 0x0080, "Tự khôi phục từ tiếng Anh");
 
+    // Show Window on Start
+    add_item(15, 250, 170, 14, IDC_CHK_SHOW_WINDOW as i16, BS_AUTOCHECKBOX as u32, 0x0080, "Hiện cửa sổ khi khởi động");
+
     // Debug
-    add_item(15, 250, 170, 14, IDC_CHK_DEBUG as i16, BS_AUTOCHECKBOX as u32, 0x0080, "Bật Log Debug (Log vào file)");
+    add_item(15, 265, 170, 14, IDC_CHK_DEBUG as i16, BS_AUTOCHECKBOX as u32, 0x0080, "Bật Log Debug (Log vào file)");
     
     buffer
 }

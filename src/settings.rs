@@ -25,7 +25,10 @@ pub struct Settings {
     #[serde(default)]
     pub auto_switch_mode: bool,
     #[serde(default)]
+
     pub auto_restore_english: bool,
+    #[serde(default)]
+    pub show_window_on_start: bool,
     #[serde(default)]
     pub debug_enabled: bool,
 }
@@ -46,6 +49,7 @@ impl Default for Settings {
             run_with_system: false,
             auto_switch_mode: false,
             auto_restore_english: false,
+            show_window_on_start: false,
             debug_enabled: false,
         }
     }
