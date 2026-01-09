@@ -50,20 +50,18 @@ const IDC_GRP_SHORTCUT: i32 = 115;
 const IDC_GRP_SYSTEM: i32 = 116;
 
 const IDC_CHK_AUTO_CAP: i32 = 117;
+const IDC_CHK_DEBUG: i32 = 118;
 
 use windows::Win32::UI::Shell::{
     Shell_NotifyIconW, NOTIFYICONDATAW, NIM_ADD, NIM_DELETE, NIM_MODIFY, NIF_ICON, NIF_MESSAGE, NIF_TIP,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateIconIndirect, DestroyIcon, HICON, ICONINFO, WM_LBUTTONUP, WM_RBUTTONUP,
     CreatePopupMenu, AppendMenuW, TrackPopupMenu, MF_STRING, TPM_RIGHTBUTTON,
     SendMessageW, LoadImageW, IMAGE_ICON, LR_DEFAULTSIZE, WM_SETICON, ICON_BIG, ICON_SMALL,
+    WM_LBUTTONUP, WM_RBUTTONUP, HICON, DestroyIcon,
 };
-use windows::Win32::Graphics::Gdi::{
-    CreateCompatibleDC, CreateBitmap, DeleteObject, DeleteDC,
-    HDC,
 
-};
+
 // use std::sync::atomic::{AtomicBool, Ordering}; // Removed unused atomics
 
 const WM_TRAYICON: u32 = windows::Win32::UI::WindowsAndMessaging::WM_USER + 1;
@@ -147,6 +145,14 @@ unsafe extern "system" fn dialog_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lpar
             update_tray_icon(hwnd);
             let settings = ENGINE.lock().get_settings();
             check_dlg_button(hwnd, IDC_CHK_ENABLED, settings.enabled);
+            check_dlg_button(hwnd, IDC_CHK_W_AS_U, settings.w_as_u_at_start);
+            check_dlg_button(hwnd, IDC_CHK_BRACKET, settings.bracket_as_uo);
+            check_dlg_button(hwnd, IDC_CHK_MODERN, settings.modern_tone);
+            check_dlg_button(hwnd, IDC_CHK_SYSTEM, settings.run_with_system);
+            check_dlg_button(hwnd, IDC_CHK_AUTO_SWITCH, settings.auto_switch_mode);
+            check_dlg_button(hwnd, IDC_CHK_RESTORE_ENG, settings.auto_restore_english);
+            check_dlg_button(hwnd, IDC_CHK_AUTO_CAP, settings.auto_capitalize);
+            check_dlg_button(hwnd, IDC_CHK_DEBUG, settings.debug_enabled);
             0
         }
         WM_TRAYICON => {
@@ -193,7 +199,7 @@ unsafe extern "system" fn dialog_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lpar
 
              if id == IDC_CHK_ENABLED || id == IDC_CHK_W_AS_U || id == IDC_CHK_BRACKET || 
                 id == IDC_CHK_MODERN || id == IDC_CHK_SYSTEM || id == IDC_CHK_AUTO_SWITCH ||
-                id == IDC_CHK_RESTORE_ENG || id == IDC_CHK_AUTO_CAP ||
+                id == IDC_CHK_RESTORE_ENG || id == IDC_CHK_AUTO_CAP || id == IDC_CHK_DEBUG ||
                 (id == IDC_COMBO_METHOD && code == 1) { 
                  
                  save_settings_from_ui(hwnd);
@@ -221,49 +227,8 @@ unsafe extern "system" fn dialog_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lpar
 }
 
 // Helper to load icon from memory
-unsafe fn load_icon_from_memory(data: &[u8]) -> Option<HICON> {
-    // Load original image without resizing. 
-    // If the user provides 64x64, we use 64x64. Windows will scale it to tray size.
-    let img = image::load_from_memory(data).ok()?.to_rgba8();
+// Helper removed as we now load from resources directly
 
-    
-    let width = img.width() as i32;
-    let height = img.height() as i32;
-    let pixels = img.into_raw();
-
-    // Convert RGBA to BGRA for Windows
-    let mut bgra_pixels = Vec::with_capacity(pixels.len());
-    for chunk in pixels.chunks(4) {
-        if chunk.len() == 4 {
-            bgra_pixels.push(chunk[2]); // B
-            bgra_pixels.push(chunk[1]); // G
-            bgra_pixels.push(chunk[0]); // R
-            bgra_pixels.push(chunk[3]); // A
-        }
-    }
-
-    let dc = CreateCompatibleDC(HDC(0));
-    let bitmap = CreateBitmap(width, height, 1, 32, Some(bgra_pixels.as_ptr() as *const std::ffi::c_void));
-    
-    // Create mask (1bpp)
-    let mask = CreateBitmap(width, height, 1, 1, None);
-
-    let icon_info = ICONINFO {
-        fIcon: true.into(),
-        xHotspot: 0,
-        yHotspot: 0,
-        hbmMask: mask,
-        hbmColor: bitmap,
-    };
-
-    let hicon = CreateIconIndirect(&icon_info).ok();
-
-    DeleteObject(bitmap);
-    DeleteObject(mask);
-    DeleteDC(dc);
-
-    hicon
-}
 
 // Global state tracking for tray to avoid re-adding
 static mut TRAY_CREATED: bool = false;
@@ -271,37 +236,56 @@ static mut TRAY_CREATED: bool = false;
 unsafe fn update_tray_icon(hwnd: HWND) {
     let enabled = ENGINE.lock().get_settings().enabled;
     
-    const V_ICON_DATA: &[u8] = include_bytes!("../icon/V.png");
-    const E_ICON_DATA: &[u8] = include_bytes!("../icon/E.png");
+    // Resource IDs defined in icons.rc
+    // 101 ICON "icon/V.ico"
+    // 102 ICON "icon/E.ico"
+    let icon_id = if enabled { 101 } else { 102 };
 
-    let data = if enabled { V_ICON_DATA } else { E_ICON_DATA };
+    let instance = GetModuleHandleW(None).unwrap();
+    let resource_name = PCWSTR(icon_id as *const u16);
     
-    // Load directly from embedded bytes, fallback only if image decode fails (unlikely)
-    let hicon = load_icon_from_memory(data).expect("Failed to load embedded icon");
+    // Load from resources (shared icon, no need to destroy)
+    let hicon = LoadImageW(
+        instance, 
+        resource_name, 
+        IMAGE_ICON, 
+        0, 
+        0, 
+        LR_DEFAULTSIZE 
+    ).map(|h| HICON(h.0)).ok();
 
-    let tip = if enabled { "Gõ Nhanh: Tiếng Việt" } else { "Gõ Nhanh: Tiếng Anh" };
-    
-    let mut nid = NOTIFYICONDATAW::default();
-    nid.cbSize = std::mem::size_of::<NOTIFYICONDATAW>() as u32;
-    nid.hWnd = hwnd;
-    nid.uID = ID_TRAY_ICON;
-    nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
-    nid.uCallbackMessage = WM_TRAYICON;
-    nid.hIcon = hicon; 
-    
-    let tip_wide = encode_wide(tip);
-    for (i, c) in tip_wide.iter().enumerate().take(127) {
-        nid.szTip[i] = *c;
+    if let Some(hicon) = hicon {
+        let title = if enabled { "Gõ Nhanh: Tiếng Việt" } else { "Gõ Nhanh: Tiếng Anh" };
+        
+        let mut nid = NOTIFYICONDATAW::default();
+        nid.cbSize = std::mem::size_of::<NOTIFYICONDATAW>() as u32;
+        nid.hWnd = hwnd;
+        nid.uID = ID_TRAY_ICON;
+        nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
+        nid.uCallbackMessage = WM_TRAYICON;
+        nid.hIcon = hicon; 
+        
+        let title_wide = encode_wide(title);
+        for (i, c) in title_wide.iter().enumerate().take(127) {
+            nid.szTip[i] = *c;
+        }
+
+        if !TRAY_CREATED {
+            Shell_NotifyIconW(NIM_ADD, &nid);
+            TRAY_CREATED = true;
+        } else {
+            Shell_NotifyIconW(NIM_MODIFY, &nid);
+        }
+        // No DestroyIcon needed for shared icons loaded via LoadImageW without LR_LOADFROMFILE
+        // But LoadImageW without LR_SHARED returns a copy?
+        // documentation says: "If you want to create an icon or cursor that you can use more than once, use the LoadImage function without the LR_SHARED flag." 
+        // Wait, regular LoadImage is creating a new icon if not shared.
+        // Let's assume we should destroy it if we are just setting it to tray.
+        // The tray copies the icon handle? Or takes ownership? 
+        // Shell_NotifyIcon documentation: "The system makes a copy of the icon."
+        // So we own hicon and should destroy it.
+        let _ = DestroyIcon(hicon);
     }
-
-    if !TRAY_CREATED {
-        Shell_NotifyIconW(NIM_ADD, &nid);
-        TRAY_CREATED = true;
-    } else {
-        Shell_NotifyIconW(NIM_MODIFY, &nid);
-    }
-    
-    let _ = DestroyIcon(hicon);
 }
 
 unsafe fn remove_tray_icon(hwnd: HWND) {
@@ -442,7 +426,7 @@ fn create_dialog_template(title: &str) -> Vec<u8> {
                 DS_MODALFRAME as u32 | DS_CENTER as u32 | DS_SETFONT as u32;
                 
     let ext_style = 0u32;
-    let num_items: u16 = 16; // Count of controls below
+    let num_items: u16 = 17; // Increased count for Debug checkbox
     
     buffer.extend_from_slice(&style.to_le_bytes());
     buffer.extend_from_slice(&ext_style.to_le_bytes());
@@ -452,7 +436,7 @@ fn create_dialog_template(title: &str) -> Vec<u8> {
     buffer.extend_from_slice(&100i16.to_le_bytes());
     buffer.extend_from_slice(&100i16.to_le_bytes());
     buffer.extend_from_slice(&200i16.to_le_bytes());
-    buffer.extend_from_slice(&280i16.to_le_bytes()); // Increased height
+    buffer.extend_from_slice(&300i16.to_le_bytes()); // Increased height
     
     // Menu, Class
     buffer.extend_from_slice(&0u16.to_le_bytes());
@@ -506,16 +490,14 @@ fn create_dialog_template(title: &str) -> Vec<u8> {
     };
 
     // SECTION 1: Input Attributes
-    // GroupBox - Increased height to fit Auto Cap
+    // GroupBox - Ends at 120
     add_item(5, 5, 190, 115, IDC_GRP_INPUT as i16, BS_GROUPBOX as u32, 0x0080, "Bộ gõ");
     
     // Enabled
     add_item(15, 20, 170, 14, IDC_CHK_ENABLED as i16, BS_AUTOCHECKBOX as u32, 0x0080, "Bộ gõ tiếng Việt");
     
     // Method (Label + Combo)
-    // Label
     add_item(15, 38, 40, 12, -1, 0, 0x0082, "Kiểu gõ");
-    // Combo
     add_item(60, 36, 120, 100, IDC_COMBO_METHOD as i16, CBS_DROPDOWNLIST as u32 | WS_VSCROLL.0, 0x0085, "");
     
     // W as U
@@ -524,37 +506,40 @@ fn create_dialog_template(title: &str) -> Vec<u8> {
     // Brackets
     add_item(15, 70, 170, 14, IDC_CHK_BRACKET as i16, BS_AUTOCHECKBOX as u32, 0x0080, "Gõ ] thành Ư, [ thành Ơ");
     
-    // Modern Tone (Keeping it)
-    // Modern Tone (Keeping it)
+    // Modern Tone
     add_item(15, 85, 170, 14, IDC_CHK_MODERN as i16, BS_AUTOCHECKBOX as u32, 0x0080, "Dấu thanh hiện đại (òa, úy)");
 
     // Auto Capitalize
     add_item(15, 100, 170, 14, IDC_CHK_AUTO_CAP as i16, BS_AUTOCHECKBOX as u32, 0x0080, "Tự động viết hoa (sau dấu .)");
 
     // SECTION 2: Shortcuts
-    add_item(5, 115, 190, 60, IDC_GRP_SHORTCUT as i16, BS_GROUPBOX as u32, 0x0080, "Phím tắt");
+    // Moved down to start at 125 (ends at 185) to avoid overlap with Section 1 (ends at 120)
+    add_item(5, 125, 190, 60, IDC_GRP_SHORTCUT as i16, BS_GROUPBOX as u32, 0x0080, "Phím tắt");
     
-    // Toggle Trigger (Label + Button placeholder)
-    add_item(15, 130, 80, 12, -1, 0, 0x0082, "Phím tắt bật/tắt");
-    add_item(100, 128, 80, 14, IDC_BTN_SHORTCUT as i16, 0, 0x0080, "Ctrl + Shift"); // Placeholder text
+    // Toggle Trigger
+    add_item(15, 140, 80, 12, -1, 0, 0x0082, "Phím tắt bật/tắt");
+    add_item(100, 138, 80, 14, IDC_BTN_SHORTCUT as i16, 0, 0x0080, "Ctrl + Shift"); 
     
     // Shortcut Table
-    add_item(15, 150, 170, 14, IDC_BTN_TABLE as i16, 0, 0x0080, "Bảng gõ tắt > (3/6)"); 
+    add_item(15, 160, 170, 14, IDC_BTN_TABLE as i16, 0, 0x0080, "Bảng gõ tắt > (3/6)"); 
 
     // SECTION 3: System
-    add_item(5, 180, 190, 80, IDC_GRP_SYSTEM as i16, BS_GROUPBOX as u32, 0x0080, "Hệ thống");
+    // Moved down to start at 190 (ends at 290) to avoid overlap with Section 2 (ends at 185)
+    // Height increased to 100 to fit Debug checkbox
+    add_item(5, 190, 190, 100, IDC_GRP_SYSTEM as i16, BS_GROUPBOX as u32, 0x0080, "Hệ thống");
     
     // Run with system
-    add_item(15, 195, 170, 14, IDC_CHK_SYSTEM as i16, BS_AUTOCHECKBOX as u32, 0x0080, "Khởi động cùng hệ thống");
+    add_item(15, 205, 170, 14, IDC_CHK_SYSTEM as i16, BS_AUTOCHECKBOX as u32, 0x0080, "Khởi động cùng hệ thống");
     
     // Auto switch
-    add_item(15, 210, 170, 14, IDC_CHK_AUTO_SWITCH as i16, BS_AUTOCHECKBOX as u32, 0x0080, "Tự chuyển chế độ theo ứng dụng");
+    add_item(15, 220, 170, 14, IDC_CHK_AUTO_SWITCH as i16, BS_AUTOCHECKBOX as u32, 0x0080, "Tự chuyển chế độ theo ứng dụng");
     
     // Restore English
-    add_item(15, 225, 170, 14, IDC_CHK_RESTORE_ENG as i16, BS_AUTOCHECKBOX as u32, 0x0080, "Tự khôi phục từ tiếng Anh");
-    
-    // Beta badge/label? Maybe just part of text.
+    add_item(15, 235, 170, 14, IDC_CHK_RESTORE_ENG as i16, BS_AUTOCHECKBOX as u32, 0x0080, "Tự khôi phục từ tiếng Anh");
 
+    // Debug
+    add_item(15, 250, 170, 14, IDC_CHK_DEBUG as i16, BS_AUTOCHECKBOX as u32, 0x0080, "Bật Log Debug (Log vào file)");
+    
     buffer
 }
 

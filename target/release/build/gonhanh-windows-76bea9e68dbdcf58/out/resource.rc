@@ -1,0 +1,25 @@
+#pragma code_page(65001)
+1 VERSIONINFO
+FILETYPE 0x1
+FILEOS 0x40004
+PRODUCTVERSION 0, 1, 0, 0
+FILEVERSION 0, 1, 0, 0
+FILESUBTYPE 0x0
+FILEFLAGSMASK 0x3f
+FILEFLAGS 0x0
+{
+BLOCK "StringFileInfo"
+{
+BLOCK "000004b0"
+{
+VALUE "ProductName", "gonhanh-windows"
+VALUE "FileDescription", "gonhanh-windows"
+VALUE "FileVersion", "0.1.0"
+VALUE "ProductVersion", "0.1.0"
+}
+}
+BLOCK "VarFileInfo" {
+VALUE "Translation", 0x0, 0x04b0
+}
+}
+

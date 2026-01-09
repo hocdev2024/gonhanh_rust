@@ -26,6 +26,8 @@ pub struct Settings {
     pub auto_switch_mode: bool,
     #[serde(default)]
     pub auto_restore_english: bool,
+    #[serde(default)]
+    pub debug_enabled: bool,
 }
 
 fn default_true() -> bool { true }
@@ -44,6 +46,7 @@ impl Default for Settings {
             run_with_system: false,
             auto_switch_mode: false,
             auto_restore_english: false,
+            debug_enabled: false,
         }
     }
 }

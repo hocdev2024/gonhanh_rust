@@ -6,7 +6,7 @@ mod key_map;
 mod settings;
 mod ui;
 
-use log::info;
+
 
 fn main() {
     unsafe {
@@ -41,8 +41,9 @@ fn main() {
     }
 
     // Initialize logger
-    env_logger::init();
-    info!("Gõ Nhanh (Rust) Starting...");
+    // Logger removed for size optimization
+    // env_logger::init();
+    // info!("Gõ Nhanh (Rust) Starting...");
 
 
 

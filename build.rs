@@ -1,7 +1,9 @@
 fn main() {
     if cfg!(target_os = "windows") {
-        let mut res = winres::WindowsResource::new();
-        res.set_icon("icon/app.ico");
+        let res = winres::WindowsResource::new();
+
         res.compile().unwrap();
+        
+        embed_resource::compile("icons.rc", embed_resource::NONE);
     }
 }
